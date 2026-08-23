@@ -15,10 +15,22 @@
     <Authors>Enlace</Authors>
     <PackageTags>enlace;openapi;swagger;api-explorer</PackageTags>
     <RepositoryUrl>https://github.com/get-enlace/enlace-dotnet</RepositoryUrl>
+    <!-- Unlike npm, NuGet never auto-includes a README/license from the
+         project directory — both need explicit opt-in, or nuget.org shows
+         neither (confirmed: dotnet pack warned "missing a readme", and the
+         published .nupkg had no license metadata at all). PackageLicenseExpression
+         is the modern approach recommended by NuGet's own docs — an SPDX
+         id, no separate license file needs packaging. -->
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>
