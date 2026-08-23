@@ -1,0 +1,243 @@
+name: "Enlace.AspNetCore"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/Enlace.AspNetCore/**
+      - tests/Enlace.AspNetCore.Tests/**
+      - Enlace.sln
+      - scripts/ci-fetch-ui.sh
+      - ui-version.txt
+      - .github/workflows/enlace-aspnetcore.yml
+  # Fired by enlace-ui's own release workflow after it publishes (dev or
+  # prod) — release-strategy.md §5/§6. Any workflow in this repo declaring
+  # this event type picks it up; no filename coupling to enlace-ui's side.
+  # No workflow_dispatch escape hatch — a manual override is just a commit
+  # (even a trivial one) pushed to main, matching this repo's "CI reacts to
+  # what's committed" convention.
+  repository_dispatch:
+    types: [enlace-ui-release]
+
+permissions:
+  contents: write # push commits/tags
+  packages: write # publish to GitHub Packages
+
+jobs:
+  # The dispatch listener does exactly one thing: pin @get-enlace/ui's
+  # target *prod* version and commit it. Only meaningful for a "production"
+  # dispatch — dev builds always fetch whatever's currently under the
+  # floating `dev` dist-tag (see deploy-dev below), so there's nothing to
+  # pin or react to for a "development" dispatch; this job (and everything
+  # after it) simply doesn't run for one.
+  #
+  # Deliberately falls through into deploy-dev/deploy-prod within this same
+  # run (via `needs:` below) rather than relying on this commit's push to
+  # retrigger the workflow — a push made with the default GITHUB_TOKEN
+  # can't do that (GitHub's own loop-prevention rule), and introducing a
+  # second PAT just to force a retrigger isn't worth it for this.
+  handle-ui-release:
+    if: github.event_name == 'repository_dispatch' && github.event.client_payload.environment == 'production'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      pinned: ${{ steps.pin.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Update pinned @get-enlace/ui version
+        id: pin
+        run: |
+          new_version="${{ github.event.client_payload.ui-version }}"
+          current_version="$(cat ui-version.txt 2>/dev/null || true)"
+          if [ "$new_version" = "$current_version" ]; then
+            echo "ui-version.txt already pinned to ${new_version} — nothing to do"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "$new_version" > ui-version.txt
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit pinned version
+        if: steps.pin.outputs.changed == 'true'
+        run: |
+          git add ui-version.txt
+          git commit -m "chore: pin @get-enlace/ui to ${{ github.event.client_payload.ui-version }} (enlace-ui-release dispatch)"
+          git push origin HEAD:main
+
+  deploy-dev:
+    # Ordinary pushes always run this. A repository_dispatch run only
+    # reaches here if handle-ui-release actually pinned something new — a
+    # "development" dispatch (handle-ui-release skipped) or a redundant
+    # "production" dispatch (same version already pinned) legitimately does
+    # nothing here, since a dev build always re-fetches the current `dev`
+    # tag fresh regardless of any pinned version.
+    needs: handle-ui-release
+    if: |
+      github.event_name == 'push' ||
+      needs.handle-ui-release.outputs.pinned == 'true'
+    runs-on: ubuntu-latest
+    environment: development
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          # Full history + tags — "Check for changes" below diffs against
+          # this package's most recent enlace-aspnetcore-v* tag (dev or
+          # prod) to decide whether there's anything new to publish.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - run: dotnet restore
+      - run: dotnet build --no-restore --configuration Release
+      - run: dotnet test --no-build --configuration Release
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for changes since last publish
+        id: diff
+        run: |
+          last_tag="$(git tag -l "enlace-aspnetcore-v*" --sort=-creatordate | head -n1)"
+          if [ -n "$last_tag" ] && git diff --quiet "$last_tag" -- src/Enlace.AspNetCore; then
+            echo "src/Enlace.AspNetCore: unchanged since ${last_tag}"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Dev builds always track the floating `dev` dist-tag — @get-enlace/ui
+      # always publishes its dev builds under that one tag no matter what
+      # the underlying version number is, so there's no version to resolve
+      # or pin here at all, unlike deploy-prod below.
+      - name: Fetch @get-enlace/ui (dev)
+        run: scripts/ci-fetch-ui.sh dev
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set the dev version
+        id: version
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          # run_id, not run_number: run_number resets to 1 per workflow
+          # file, which risks colliding with a version already published
+          # under that same repo-local counter.
+          base_version="$(dotnet msbuild src/Enlace.AspNetCore -getProperty:Version)"
+          dev_version="${base_version}-dev.${{ github.run_id }}"
+          echo "devVersion=$dev_version" >> "$GITHUB_OUTPUT"
+
+      - name: Pack (dev version)
+        if: steps.diff.outputs.changed == 'true'
+        run: >
+          dotnet pack src/Enlace.AspNetCore -c Release -o artifacts/nuget
+          -p:Version=${{ steps.version.outputs.devVersion }}
+
+      - name: Publish to GitHub Packages (dev)
+        if: steps.diff.outputs.changed == 'true'
+        run: >
+          dotnet nuget push artifacts/nuget/*.nupkg
+          --source https://nuget.pkg.github.com/get-enlace/index.json
+          --api-key ${{ secrets.GITHUB_TOKEN }}
+          --skip-duplicate
+
+      - name: Tag and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git tag "enlace-aspnetcore-v${{ steps.version.outputs.devVersion }}"
+          git push origin "enlace-aspnetcore-v${{ steps.version.outputs.devVersion }}"
+
+  # Requires deploy-dev to have succeeded first — prod never ships anything
+  # that hasn't just gone out (or already sat unchanged) as a dev build.
+  # Also gated behind the Prod environment's required-reviewer approval:
+  # this job pauses here until someone approves it.
+  deploy-prod:
+    needs: deploy-dev
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - run: dotnet restore
+      - run: dotnet build --no-restore --configuration Release
+      - run: dotnet test --no-build --configuration Release
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      # The version to embed comes from ui-version.txt — pinned by
+      # handle-ui-release whenever enlace-ui published a real prod release,
+      # not re-resolved here. Fetched from public npmjs.org (not GitHub
+      # Packages) since this is the prod path — release-strategy.md §3.
+      - name: Fetch @get-enlace/ui (pinned in ui-version.txt, from npmjs.org)
+        run: scripts/ci-fetch-ui.sh "$(cat ui-version.txt)" https://registry.npmjs.org
+
+      # Whatever's already committed in the csproj is what gets published —
+      # semver bump type (patch/minor/major) is a human call, decided by
+      # editing <Version> before this runs, not guessed by CI.
+      - name: Read current version
+        id: current
+        run: echo "version=$(dotnet msbuild src/Enlace.AspNetCore -getProperty:Version)" >> "$GITHUB_OUTPUT"
+
+      - name: Pack
+        run: dotnet pack src/Enlace.AspNetCore -c Release -o artifacts/nuget
+
+      - name: Publish to NuGet.org (prod)
+        run: >
+          dotnet nuget push artifacts/nuget/*.nupkg
+          --source https://api.nuget.org/v3/index.json
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --skip-duplicate
+
+      - name: Tag the release
+        run: git tag "enlace-aspnetcore-v${{ steps.current.outputs.version }}"
+
+      # Stages the next release as a patch bump on top of what was just
+      # published. Edit src/Enlace.AspNetCore/Enlace.AspNetCore.csproj by
+      # hand before the next prod release if it actually needs a bigger
+      # (minor/major) bump.
+      - name: Compute next patch version
+        id: next
+        run: |
+          IFS='.' read -r major minor patch <<< "${{ steps.current.outputs.version }}"
+          echo "version=${major}.${minor}.$((patch + 1))" >> "$GITHUB_OUTPUT"
+
+      - name: Bump to next version
+        run: |
+          sed -i "s#<Version>${{ steps.current.outputs.version }}</Version>#<Version>${{ steps.next.outputs.version }}</Version>#" \
+            src/Enlace.AspNetCore/Enlace.AspNetCore.csproj
+          git add src/Enlace.AspNetCore/Enlace.AspNetCore.csproj
+
+      - name: Commit version bump
+        run: |
+          git commit -m "chore(Enlace.AspNetCore): bump to ${{ steps.next.outputs.version }} after v${{ steps.current.outputs.version }} release"
+
+      - name: Push commit and tag
+        run: git push origin HEAD:main "enlace-aspnetcore-v${{ steps.current.outputs.version }}"

@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>Enlace.AspNetCore</PackageId>
+    <Version>0.0.1</Version>
+    <Description>ASP.NET Core adapter for Enlace: serves the @get-enlace/ui bundle and resolves your OpenAPI spec.</Description>
+    <Authors>Enlace</Authors>
+    <PackageTags>enlace;openapi;swagger;api-explorer</PackageTags>
+    <RepositoryUrl>https://github.com/get-enlace/enlace-dotnet</RepositoryUrl>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Enlace.AspNetCore.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="8.0.11" />
+  </ItemGroup>
+
+  <!--
+    Populated by scripts/dev-sync-ui.sh (local) or the CI registry-fetch release step
+    (not yet wired up). Never edit these files by hand.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot-embedded/**" Exclude="wwwroot-embedded/.gitkeep" />
+  </ItemGroup>
+
+</Project>
