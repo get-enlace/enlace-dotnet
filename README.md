@@ -1,17 +1,24 @@
 # enlace-dotnet
 
-ASP.NET Core adapter for [Enlace](../enlace-ui). See [`PRD.md`](PRD.md) for the full spec.
+ASP.NET Core adapter for [Enlace](https://github.com/get-enlace/enlace-ui) — a visual,
+chained-execution canvas for any OpenAPI-documented API. This adapter's job is
+intentionally small: serve the canvas UI and resolve your app's OpenAPI document.
+Everything else (wiring up a chain, running it, credentials) happens client-side, in the
+browser, inside `@get-enlace/ui` itself.
 
-## Layout
+## What it does
 
-- `src/Enlace.AspNetCore/` — the adapter, packaged as the `Enlace.AspNetCore` NuGet package
-- `tests/Enlace.AspNetCore.Tests/` — unit tests
-- `scripts/dev-sync-ui.sh` — local dev: builds `@get-enlace/ui` from a checkout and copies its
-  `dist/` into `wwwroot-embedded/`
-- `scripts/ci-fetch-ui.sh` — CI: fetches `@get-enlace/ui`'s published tarball, from GitHub
-  Packages (dev) or npmjs.org (prod), and does the same (curl + tar, no Node)
-- `ui-version.txt` — the pinned `@get-enlace/ui` version `deploy-prod` embeds; updated by
-  `handle-ui-release` (see CI/CD below) whenever `enlace-ui` publishes a real prod release
+- Serves the `@get-enlace/ui` static bundle at a configurable route (`/enlace` by default)
+- Resolves your app's OpenAPI document automatically, or via explicit config — see
+  [Spec resolution](#spec-resolution) below
+- Nothing else. No server-side execution engine, no persistence (yet — see
+  [Status](#status))
+
+## Install
+
+```bash
+dotnet add package Enlace.AspNetCore
+```
 
 ## Usage
 
@@ -32,50 +39,26 @@ builder.Services.AddEnlace(options =>
 });
 ```
 
-## Build & test
+## Spec resolution
 
-```bash
-dotnet build
-dotnet test
-```
-
-## CI/CD
-
-Mirrors [`enlace-js`](../enlace-js)'s per-package workflow pattern.
-
-- `.github/workflows/build.yml` — build + test on every PR into `main`.
-- `.github/workflows/enlace-aspnetcore.yml` — two triggers: push to `main` (path-filtered to
-  `src/Enlace.AspNetCore/**`, `ui-version.txt`, etc.), and `repository_dispatch:
-  enlace-ui-release`, fired by `enlace-ui`'s own release workflow whenever it publishes (see
-  [`release-strategy.md`](../release-strategy.md)) — this repo is an **embedding-based**
-  adapter (§2), so it must actively rebuild and republish on every `enlace-ui` change, or
-  consumers stay frozen on an old bundle. No manual `workflow_dispatch` escape hatch — a
-  forced rebuild is just a commit (even a trivial one) pushed to `main`.
-
-  `handle-ui-release` only runs for a *production* dispatch (a dev dispatch is a no-op here —
-  see `deploy-dev` below) and does exactly one thing: pins the incoming version into
-  `ui-version.txt` and commits it. It then falls through, in the same run, into `deploy-dev`
-  and `deploy-prod` — rather than relying on that commit's push to retrigger the workflow,
-  which a `GITHUB_TOKEN`-authored push can't do anyway.
-
-  `deploy-dev` always fetches whatever's currently under `@get-enlace/ui`'s floating `dev`
-  dist-tag — no version to resolve or pin, since that tag always points at the latest dev
-  build regardless of its underlying version number. It packs a `<Version>-dev.<run id>`
-  build and publishes it to GitHub Packages, then tags it (`enlace-aspnetcore-v*`).
-
-  `deploy-prod` (gated behind the `production` environment's required-reviewer approval)
-  packs whatever version is currently committed in the `.csproj`, fetches the UI bundle
-  pinned in `ui-version.txt` from npmjs.org (not GitHub Packages — this is the prod path),
-  publishes to nuget.org, tags the release, and commits the next patch version bump.
-
-One-time setup this needs, done in the repo's GitHub settings, not in code:
-- A `development` environment and a `production` environment (the latter with a required
-  reviewer) under **Settings → Environments**.
-- A `NUGET_API_KEY` secret (an nuget.org API key) on the `production` environment.
-  `GITHUB_TOKEN` (used for the GitHub Packages dev channel) is automatic — no setup needed.
-- No secret is needed here for `repository_dispatch` itself — the PAT that sends it
-  (`CROSS_REPO_PAT`) lives on `enlace-ui`'s side, not this repo's.
+1. **Zero-config default** — if your app already runs Swashbuckle conventionally, its spec
+   is already being served at `/swagger/v1/swagger.json`; the adapter defaults to that path
+   with no configuration needed.
+2. **Auto-detect fallback** — if that doesn't resolve, it tries a short list of other
+   conventional paths (`/openapi.json`, `/swagger.json`) with a plain HTTP request to your
+   app's own server — no reflection into route tables or framework internals.
+3. **Explicit override** — set `options.SpecUrl` to point at anything else: a customized
+   route, a different service's spec, a static file.
+4. **Failure is loud** — if nothing resolves, startup fails with an error naming exactly
+   what was tried and how to fix it, rather than rendering a silent empty canvas.
 
 ## Status
 
-Pre-release scaffold. Persistence is out of scope for this phase.
+Pre-release scaffold. Persistence (saving/reloading workflows and credentials) is out of
+scope for this phase — canvas state and credentials live in browser memory for the session
+only.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for local development setup, build/test commands,
+and how the CI/CD pipeline works.
