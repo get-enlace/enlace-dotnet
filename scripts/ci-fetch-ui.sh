@@ -39,7 +39,7 @@ if [[ "$REGISTRY" == *"npm.pkg.github.com"* ]]; then
 fi
 
 echo "Resolving ${PACKAGE}@${REF} from ${REGISTRY}..."
-packument="$(curl -sS "${auth[@]}" "${REGISTRY}/${PACKAGE}")"
+packument="$(curl -sSfL "${auth[@]}" "${REGISTRY}/${PACKAGE}")"
 
 if [[ "$REF" =~ ^[0-9] ]]; then
   # Looks like a version already (starts with a digit) — pin as-is, skip
@@ -63,7 +63,13 @@ echo "Fetching ${PACKAGE}@${version} from ${tarball_url}"
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 
-curl -sS "${auth[@]}" "$tarball_url" -o "$workdir/package.tgz"
+# -L: GitHub Packages' /download/ tarball URLs redirect to backing storage
+# — without following, curl saves the redirect response itself (empty or a
+# tiny HTML/text body) as package.tgz, and tar fails with a confusing
+# "not in gzip format" rather than a clear fetch error. -f: fail loudly on
+# an HTTP error status instead of writing the error page to package.tgz
+# and letting tar's failure be the only symptom.
+curl -sSfL "${auth[@]}" "$tarball_url" -o "$workdir/package.tgz"
 tar -xzf "$workdir/package.tgz" -C "$workdir"
 
 if [[ ! -d "$workdir/package/dist" ]]; then
