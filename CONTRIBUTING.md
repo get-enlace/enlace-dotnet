@@ -45,24 +45,38 @@ pattern.
 
   `handle-ui-release` only runs for a *production* dispatch (a dev dispatch is a no-op here —
   see `deploy-dev` below) and does exactly one thing: pins the incoming version into
-  `ui-version.txt` and commits it. It then falls through, in the same run, into `deploy-dev`
-  and `deploy-prod` — rather than relying on that commit's push to retrigger the workflow,
-  which a `GITHUB_TOKEN`-authored push can't do anyway.
+  `ui-version.txt` and commits it — a `GITHUB_TOKEN`-authored push can't retrigger the
+  workflow, so it doesn't try to.
 
-  `deploy-dev` always fetches whatever's currently under `@get-enlace/ui`'s floating `dev`
-  dist-tag — no version to resolve or pin, since that tag always points at the latest dev
-  build regardless of its underlying version number. It packs a `<Version>-dev.<run id>`
-  build and publishes it to GitHub Packages, then tags it (`enlace-aspnetcore-v*`).
+  `deploy-dev` runs **unconditionally** on every trigger — push, or a `repository_dispatch`
+  for either environment — always fetching whatever's currently under `@get-enlace/ui`'s
+  floating `dev` dist-tag, no version to resolve or pin. It packs a `<Version>-dev.<run id>`
+  build and publishes it to GitHub Packages, then tags it (`enlace-aspnetcore-v*`). It's
+  deliberately not gated on `handle-ui-release` in any way — a `development` dispatch needs
+  to trigger a real rebuild here too, or this repo (an embedding-based adapter) would only
+  ever pick up a fresh dev UI build whenever its own `main` happened to get pushed to,
+  silently defeating the whole point of the dispatch cascade.
 
   `deploy-prod` (gated behind the `production` environment's required-reviewer approval)
   packs whatever version is currently committed in the `.csproj`, fetches the UI bundle
   pinned in `ui-version.txt` from npmjs.org (not GitHub Packages — this is the prod path),
   publishes to nuget.org, tags the release, and commits the next patch version bump.
 
-One-time setup this needs, done in the repo's GitHub settings, not in code:
-- A `development` environment and a `production` environment (the latter with a required
-  reviewer) under **Settings → Environments**.
-- A `NUGET_API_KEY` secret (an nuget.org API key) on the `production` environment.
+  Publishing to nuget.org uses **Trusted Publishing** (OIDC) rather than a stored API key —
+  `NuGet/login@v1` exchanges this run's GitHub OIDC token for a short-lived (1hr) NuGet API
+  key at publish time. Nothing long-lived is stored in this repo; the trust relationship
+  lives entirely in the Trusted Publisher policy configured on nuget.org's side.
+
+One-time setup this needs:
+- **On GitHub** (**Settings → Environments**): a `development` environment and a
+  `production` environment (the latter with a required reviewer).
+- **On GitHub** (`production` environment secret): `NUGET_USER` — your nuget.org username
+  (the profile name, *not* an email address) — passed to `NuGet/login@v1`.
   `GITHUB_TOKEN` (used for the GitHub Packages dev channel) is automatic — no setup needed.
+- **On nuget.org** (Trusted Publishing → Add policy): Package owner = the account/org that
+  owns `Enlace.AspNetCore`; Repository = `get-enlace/enlace-dotnet`; Workflow file =
+  `enlace-aspnetcore.yml`; Environment = `production` — this policy is what actually
+  authorizes the OIDC exchange; the workflow's `id-token: write` permission alone isn't
+  enough without it.
 - No secret is needed here for `repository_dispatch` itself — the PAT that sends it
   (`CROSS_REPO_PAT`) lives on `enlace-ui`'s side, not this repo's.
