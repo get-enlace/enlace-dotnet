@@ -10,7 +10,7 @@
 
   <PropertyGroup>
     <PackageId>Enlace.AspNetCore</PackageId>
-    <Version>0.0.2</Version>
+    <Version>0.0.3</Version>
     <Description>ASP.NET Core adapter for Enlace: serves the @get-enlace/ui bundle and resolves your OpenAPI spec.</Description>
     <Authors>Enlace</Authors>
     <PackageTags>enlace;openapi;swagger;api-explorer</PackageTags>
