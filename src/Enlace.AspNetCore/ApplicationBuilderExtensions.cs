@@ -53,8 +53,6 @@ public static class ApplicationBuilderExtensions
                     return;
                 }
 
-                // Read fresh on every request — never stored — matching the adapter contract
-                // every @get-enlace/ui-compatible adapter follows.
                 var client = clientFactory.CreateClient(EnlaceDefaults.HttpClientName);
                 var json = await SpecResolver.TryFetchAsync(client, cache.ResolvedUrl, context.RequestAborted);
 
@@ -65,9 +63,6 @@ public static class ApplicationBuilderExtensions
                         $"Enlace: couldn't re-fetch the OpenAPI document from {cache.ResolvedUrl}.");
                     return;
                 }
-
-                var fallbackBaseUrl = new Uri(cache.ResolvedUrl).GetLeftPart(UriPartial.Authority);
-                json = SpecDocument.EnsureServersUrl(json, fallbackBaseUrl);
 
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsync(json);
