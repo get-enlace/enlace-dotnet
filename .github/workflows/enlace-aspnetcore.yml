@@ -115,11 +115,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      # Unlike a plain push (where "nothing in src/Enlace.AspNetCore changed"
+      # genuinely means nothing to publish), a repository_dispatch means
+      # @get-enlace/ui itself changed — this repo embeds that bundle, so it
+      # must rebuild and republish regardless of whether its own source
+      # changed at all.
       - name: Check for changes since last publish
         id: diff
         run: |
-          last_tag="$(git tag -l "enlace-aspnetcore-v*" --sort=-creatordate | head -n1)"
-          if [ -n "$last_tag" ] && git diff --quiet "$last_tag" -- src/Enlace.AspNetCore; then
+          last_tag="$(git tag -l 'enlace-aspnetcore-v*' --sort=-creatordate | head -n1)"
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "repository_dispatch trigger — always republish (the UI bundle changed)"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          elif [ -n "$last_tag" ] && git diff --quiet "$last_tag" -- src/Enlace.AspNetCore; then
             echo "src/Enlace.AspNetCore: unchanged since ${last_tag}"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
