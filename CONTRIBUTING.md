@@ -9,7 +9,7 @@
 - `scripts/ci-fetch-ui.sh` — CI: fetches `@get-enlace/ui`'s published tarball, from GitHub
   Packages (dev) or npmjs.org (prod), and does the same (curl + tar, no Node)
 - `ui-version.txt` — the pinned `@get-enlace/ui` version `deploy-prod` embeds; updated by
-  `handle-ui-release` (see CI/CD below) whenever `enlace-ui` publishes a real prod release
+  `handle-ui-release` (see CI/CD below) whenever `enlace` publishes a real prod release
 
 ## Build & test
 
@@ -23,7 +23,7 @@ dotnet test
 `wwwroot-embedded/` (the adapter's embedded static assets) is never committed — it's a
 build artifact, populated one of two ways:
 
-- **`scripts/dev-sync-ui.sh [path-to-enlace-ui-checkout]`** — builds `@get-enlace/ui` from a
+- **`scripts/dev-sync-ui.sh [path-to-enlace-checkout]`** — builds `@get-enlace/ui` from a
   local checkout and copies its `dist/` output in, so you can sanity-check the real
   embedded-resource path before a release without touching the registry.
 - **CI** (`scripts/ci-fetch-ui.sh`) — fetches the published tarball instead; see CI/CD below.
@@ -36,10 +36,9 @@ pattern.
 - `.github/workflows/build.yml` — build + test on every PR into `main`.
 - `.github/workflows/enlace-aspnetcore.yml` — two triggers: push to `main` (path-filtered to
   `src/Enlace.AspNetCore/**`, `ui-version.txt`, etc.), and `repository_dispatch:
-  enlace-ui-release`, fired by `enlace-ui`'s own release workflow whenever it publishes (see
-  [`release-strategy.md`](https://github.com/get-enlace/enlace-ui)) — this repo is an
+  enlace-ui-release`, fired by `enlace`'s own release workflow whenever it publishes — this repo is an
   **embedding-based** adapter, so it must actively rebuild and republish on every
-  `enlace-ui` change, or consumers stay frozen on an old bundle. No manual
+  `enlace` change, or consumers stay frozen on an old bundle. No manual
   `workflow_dispatch` escape hatch — a forced rebuild is just a commit (even a trivial one)
   pushed to `main`.
 
@@ -79,4 +78,4 @@ One-time setup this needs:
   authorizes the OIDC exchange; the workflow's `id-token: write` permission alone isn't
   enough without it.
 - No secret is needed here for `repository_dispatch` itself — the PAT that sends it
-  (`CROSS_REPO_PAT`) lives on `enlace-ui`'s side, not this repo's.
+  (`CROSS_REPO_PAT`) lives on `enlace`'s side, not this repo's.

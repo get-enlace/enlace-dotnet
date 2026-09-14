@@ -1,6 +1,6 @@
 # enlace-dotnet
 
-ASP.NET Core adapter for [Enlace](https://github.com/get-enlace/enlace-ui) — a visual,
+ASP.NET Core adapter for [Enlace](https://github.com/get-enlace/enlace) — a visual,
 chained-execution canvas for any OpenAPI-documented API. This adapter's job is
 intentionally small: serve the canvas UI and resolve your app's OpenAPI document.
 Everything else (wiring up a chain, running it, credentials) happens client-side, in the
