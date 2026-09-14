@@ -1,18 +1,18 @@
 # enlace-dotnet
 
-ASP.NET Core adapter for [Enlace](https://github.com/get-enlace/enlace) — a visual,
-chained-execution canvas for any OpenAPI-documented API. This adapter's job is
-intentionally small: serve the canvas UI and resolve your app's OpenAPI document.
-Everything else (wiring up a chain, running it, credentials) happens client-side, in the
-browser, inside `@get-enlace/ui` itself.
+ASP.NET Core adapter for [Enlace](https://github.com/get-enlace/enlace) — an interactive visual execution graph for any OpenAPI 3.x API.
+
+[![NuGet](https://img.shields.io/nuget/v/Enlace.AspNetCore.svg)](https://www.nuget.org/packages/Enlace.AspNetCore)
+[![Live Demo](https://img.shields.io/badge/demo-live%20on%20render-success)](https://enlace-fastapi.onrender.com/enlace/)
+[![Star on GitHub](https://img.shields.io/github/stars/get-enlace/enlace?style=social)](https://github.com/get-enlace/enlace)
+
+This adapter's job is intentionally small: serve the canvas UI and resolve your app's OpenAPI document. Everything else (wiring up a chain, concurrent execution, credentials) happens client-side in the browser inside `@get-enlace/ui`. Full documentation: [get-enlace.github.io](https://get-enlace.github.io/).
 
 ## What it does
 
 - Serves the `@get-enlace/ui` static bundle at a configurable route (`/enlace` by default)
-- Resolves your app's OpenAPI document automatically, or via explicit config — see
-  [Spec resolution](#spec-resolution) below
-- Nothing else. No server-side execution engine, no persistence (yet — see
-  [Status](#status))
+- Resolves your app's OpenAPI document automatically, or via explicit config — see [Spec resolution](#spec-resolution) below
+- Client-side execution: All chain execution, Kahn's algorithm DAG concurrency, and credential handling run directly in the browser via `@get-enlace/ui`.
 
 ## Install
 
@@ -52,11 +52,9 @@ builder.Services.AddEnlace(options =>
 4. **Failure is loud** — if nothing resolves, startup fails with an error naming exactly
    what was tried and how to fix it, rather than rendering a silent empty canvas.
 
-## Status
+## Architecture
 
-Pre-release scaffold. Persistence (saving/reloading workflows and credentials) is out of
-scope for this phase — canvas state and credentials live in browser memory for the session
-only.
+The ASP.NET Core adapter is intentionally thin and symmetric across Enlace languages: it serves static assets and resolves your OpenAPI document. All workflow execution happens client-side directly from your browser to your API endpoints. Workflows and layout are autosaved locally in the browser via IndexedDB.
 
 ## Contributing
 

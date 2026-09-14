@@ -11,8 +11,8 @@
   <PropertyGroup>
     <PackageId>Enlace.AspNetCore</PackageId>
     <Version>0.0.9</Version>
-    <Description>ASP.NET Core adapter for Enlace: serves the @get-enlace/ui bundle and resolves your OpenAPI spec.</Description>
-    <Authors>Enlace</Authors>
+    <Description>ASP.NET Core adapter for Enlace — an interactive visual execution graph for OpenAPI 3.x APIs.</Description>
+    <Authors>The Enlace Authors</Authors>
     <PackageTags>enlace;openapi;swagger;api-explorer</PackageTags>
     <RepositoryUrl>https://github.com/get-enlace/enlace-dotnet</RepositoryUrl>
     <!-- Unlike npm, NuGet never auto-includes a README/license from the
