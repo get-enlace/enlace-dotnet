@@ -10,7 +10,7 @@
 
   <PropertyGroup>
     <PackageId>Enlace.AspNetCore</PackageId>
-    <Version>0.0.9</Version>
+    <Version>0.0.10</Version>
     <Description>ASP.NET Core adapter for Enlace — an interactive visual execution graph for OpenAPI 3.x APIs.</Description>
     <Authors>The Enlace Authors</Authors>
     <PackageTags>enlace;openapi;swagger;api-explorer</PackageTags>
